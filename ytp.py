@@ -7,6 +7,8 @@ import math
 parser = argparse.ArgumentParser(description='Create video with by cutting out words and pasting them to a sentence')
 parser.add_argument('in_filename', help='Input filename (`-` for stdin)')
 parser.add_argument('query', help='Input word sequence (`-` for stdin)', nargs='?')
+parser.add_argument('--best', help='Input word sequence (`-` for stdin)', action='store_true')
+parser.add_argument('--worst', help='Input word sequence (`-` for stdin)', action='store_true')
 
 def cut(filename, times):
     in_file = ffmpeg.input(filename)
@@ -26,7 +28,7 @@ def cut(filename, times):
 
     joined = ffmpeg.concat(*outs, v=1, a=1).node
     output = ffmpeg.output(joined[0], joined[1], 'out.mp4')
-    print(" ".join(output.get_args()))
+    #print(" ".join(output.get_args()))
     output.run()
 
 
@@ -35,16 +37,17 @@ args = parser.parse_args()
 json_filename = args.in_filename.split(".")[0] + ".json"
 words = pd.read_json(json_filename)
 words["len"] = words["end"] - words["start"]
+lofw = words.drop_duplicates(subset=['word']).sort_values(["word"], inplace = False, ascending=[True])["word"].to_list()
+f = open("listofwords.txt", "w")
+f.write("\n".join(lofw))
+f.close()
 words.sort_values(["conf", "len"], inplace = True, ascending=[False, False])
-print(words.head(10))
-
-
 
 if args.query is not None:
     print("Constructing sentence: \"%s\"" % args.query)
 
     times = []
-    for req_word in args.query.split(" "):
+    for req_word in args.query.lower().split(" "):
         tword = req_word.rstrip("-")
         trailingrem = (len(req_word) - len(tword)) * 0.07
 
@@ -63,7 +66,13 @@ if args.query is not None:
 
     print(times)
     cut(args.in_filename, times)
-else:
+elif args.best:
     top = list(words.head(30)[["start", "end"]].to_records(index=False))
     print(top)
     cut(args.in_filename, top)
+elif args.worst:
+    bottom = list(words.tail(30)[["start", "end"]].to_records(index=False))
+    print(bottom)
+    cut(args.in_filename, bottom)
+else:
+    print("Use either --best, --worst or own query.")
