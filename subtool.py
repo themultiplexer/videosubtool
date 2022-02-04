@@ -44,8 +44,8 @@ def insert_subs(in_filename, subs_filename):
     try:
         stream = (ffmpeg
             .input(subs_filename, i=in_filename)
-            #.output(out_filename + ".mkv", codec='copy', map=['0', '1'])
-            .output(out_filename + ".mp4", **{'c:s':'mov_text'}, sub_charenc='UTF-8', codec='copy')
+            .output(out_filename + ".mkv", codec='copy')
+            #.output(out_filename + ".mp4", **{'c:s':'mov_text'}, sub_charenc='UTF-8', codec='copy')
             .overwrite_output())
         print(" ".join(stream.get_args()))
         out, err = stream.run(capture_stdout=True, capture_stderr=True)
@@ -89,24 +89,13 @@ def get_transcripts(video_filename, audio_filename):
             break
         if rec.AcceptWaveform(data):
             data = json.loads(rec.Result())
-            print(data)
-            # Large models also deliver accuracy information and timestamps (result)
-            # Use them if available otherwise approximate
+            if "text" in data:
+                print(data["text"])
             if "result" in data:
                 words = words + data["result"]
                 print('{0:.3f}% in audio time'.format((float(data["result"][-1]["end"]) / duration) * 100, 3), end='\r')
                 test.write(str(i) + "\n")
                 test.write(convtime(data["result"][0]["start"]) + " --> " + convtime(data["result"][-1]["end"]) + "\n")
-                test.write(data["text"] + "\n\n")
-                i += 1
-            else:
-                approx_start = len(text.split()) * 0.4
-                text += data["text"]
-                approx_end = len(text.split()) * 0.4
-                #words = words + len(data["text"].split())
-                print('{0:.3f}% in audio time'.format(approx_end, 3), end='\r')
-                test.write(str(i) + "\n")
-                test.write(convtime(approx_start) + " --> " + convtime(approx_end) + "\n\n")
                 test.write(data["text"] + "\n\n")
                 i += 1
                 
@@ -121,8 +110,12 @@ def get_transcripts(video_filename, audio_filename):
 
 
 def transcribe(video_filename):
-    audio_filename = decode_audio(video_filename, video_filename.with_suffix('.wav'))
-    transcripts = get_transcripts(video_filename, audio_filename)
+    if video_filename.with_suffix('.ass').is_file():
+        print("Reusing existing subtitles.")
+        insert_subs(video_filename, str(video_filename.with_suffix('.ass')))
+    else:
+        audio_filename = decode_audio(video_filename, video_filename.with_suffix('.wav'))
+        transcripts = get_transcripts(video_filename, audio_filename)
 
 
 if __name__ == '__main__':
